@@ -1,0 +1,5 @@
+.dir-locals.el
+.envrc
+testdb.sqlite
+dist-newstyle
+result
