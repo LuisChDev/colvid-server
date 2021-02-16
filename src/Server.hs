@@ -6,10 +6,9 @@
 module Server (colvidServer) where
 
 import Internal.Types
-    (AppAPI, UserAPI,  Movie(..), MovieAPI, Rating(MayoresDe12), User(..) )
-import Data.Time (fromGregorian)
+    (AppAPI, UserAPI,  Movie(..), MovieAPI, User(..) )
 import Servant
-    (Handler, (:<|>)(..), err404, errBody, throwError, serve, Application,
+    (err400, Handler, (:<|>)(..), err404, errBody, throwError, serve, Application,
      Proxy(..), Server)
 import Network.Wai.Handler.Warp (run)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -33,7 +32,7 @@ handleNewMovie dbfile Movie{..} = do
   return "película insertada exitosamente"
 
 queryById :: FromRow a => String -> Text -> Maybe Int -> Handler a
-queryById _ _ Nothing = throwError err404 {errBody = "No se especificó ID"}
+queryById _ _ Nothing = throwError err400 {errBody = "No se especificó ID"}
 queryById db tbl (Just idn) = do
   result <- liftIO . withConnection db  $ \conn ->
     query conn ("SELECT * FROM " <> Query tbl <> " WHERE idn = ?") (Only idn)
@@ -45,17 +44,18 @@ queryById db tbl (Just idn) = do
 database :: String
 database = "testdb.sqlite"
 
-userServer :: Server UserAPI
-userServer = queryById database "users" :<|> handleNewUser database
 
-movieServer :: Server MovieAPI
-movieServer = queryById database "movies" :<|> handleNewMovie database
+app :: Application
+app = serve appAPI $ userServer :<|> movieServer
+  where
+    appAPI :: Proxy AppAPI
+    appAPI = Proxy
 
-appAPI :: Proxy AppAPI
-appAPI = Proxy
+    userServer :: Server UserAPI
+    userServer = queryById database "users" :<|> handleNewUser database
 
-app2 :: Application
-app2 = serve appAPI $ userServer :<|> movieServer
+    movieServer :: Server MovieAPI
+    movieServer = queryById database "movies" :<|> handleNewMovie database
 
 -- -- -- --
 
@@ -77,6 +77,6 @@ initDB db = withConnection db $ \conn -> do
 colvidServer :: IO ()
 colvidServer = do
   initDB database
-  run 8081 app2
+  run 8081 app
 
 
