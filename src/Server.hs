@@ -6,9 +6,9 @@
 module Server (colvidServer) where
 
 import Internal.Types
-    (AppAPI, UserAPI,  Movie(..), MovieAPI, User(..) )
+    (StaticAPI, AppAPI, UserAPI,  Movie(..), MovieAPI, User(..) )
 import Servant
-    (err400, Handler, (:<|>)(..), err404, errBody, throwError, serve, Application,
+    (serveDirectoryWebApp, err400, Handler, (:<|>)(..), err404, errBody, throwError, serve, Application,
      Proxy(..), Server)
 import Network.Wai.Handler.Warp (run)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -46,7 +46,7 @@ database = "testdb.sqlite"
 
 
 app :: Application
-app = serve appAPI $ userServer :<|> movieServer
+app = serve appAPI $ userServer :<|> movieServer :<|> staticServer
   where
     appAPI :: Proxy AppAPI
     appAPI = Proxy
@@ -56,6 +56,9 @@ app = serve appAPI $ userServer :<|> movieServer
 
     movieServer :: Server MovieAPI
     movieServer = queryById database "movies" :<|> handleNewMovie database
+
+    staticServer :: Server StaticAPI
+    staticServer = serveDirectoryWebApp "assets"
 
 -- -- -- --
 

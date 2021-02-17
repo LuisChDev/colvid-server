@@ -7,7 +7,7 @@ module Internal.Types where
 import Data.Aeson.Types (FromJSON, ToJSON)
 import Data.Time (Day)
 import GHC.Generics (Generic)
-import Servant (Get, JSON, Post, QueryParam, ReqBody, (:<|>), type (:>))
+import Servant (Raw, Get, JSON, Post, QueryParam, ReqBody, (:<|>), type (:>))
 import Database.SQLite.Simple (ResultError(ConversionFailed), SQLData(SQLInteger), field, FromRow(fromRow))
 import Database.SQLite.Simple.ToField (ToField, toField)
 import Database.SQLite.Simple.FromField (returnError, FromField, fromField)
@@ -70,17 +70,18 @@ instance FromField Rating where
 
 -- El tipo de las partes de la API de nuestra aplicación.
 
-type UserAPI =
-  "users"
-    :> ( QueryParam "id" Int :> Get '[JSON] User
-           :<|> ReqBody '[JSON] User :> Post '[JSON] String
-       )
+type UserAPI = "users"
+  :> ( QueryParam "id" Int :> Get '[JSON] User
+       :<|> ReqBody '[JSON] User :> Post '[JSON] String)
 
--- data SortBy = Age | Name
+-- El tipo de la api para películas
 
-type MovieAPI = "movies" :> (QueryParam "id" Int :> Get '[JSON] Movie
-                             :<|> ReqBody '[JSON] Movie :> Post '[JSON] String)
+type MovieAPI = "movies"
+  :> (QueryParam "id" Int :> Get '[JSON] Movie
+       :<|> ReqBody '[JSON] Movie :> Post '[JSON] String)
 
-type AppAPI = UserAPI :<|> MovieAPI
+type StaticAPI = "assets" :> Raw
+
+type AppAPI = UserAPI :<|> MovieAPI :<|> StaticAPI
 
 {--}
