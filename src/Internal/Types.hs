@@ -37,13 +37,14 @@ data Movie = Movie
     idn :: Int,
     description :: String,
     duration :: Int,
-    rating :: Rating
+    rating :: Rating,
+    url :: String
   } deriving (Eq, Show, Generic)
 instance ToJSON Movie
 instance FromJSON Movie
 
 instance FromRow Movie where
-  fromRow = Movie <$> field <*> field <*> field <*> field <*> field
+  fromRow = Movie <$> field <*> field <*> field <*> field <*> field <*> field
 
 data Rating = Todos | MayoresDe7 | MayoresDe12 | MayoresDe15 | MayoresDe18
   deriving (Eq, Show, Generic)

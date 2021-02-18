@@ -1,6 +1,6 @@
 { mkDerivation, aeson, base, record-dot-preprocessor
 , record-hasfield, servant-server, sqlite-simple, stdenv, text
-, time, wai, warp
+, time, wai, wai-cors, warp
 }:
 mkDerivation {
   pname = "colvid-server";
@@ -10,9 +10,11 @@ mkDerivation {
   isExecutable = true;
   libraryHaskellDepends = [
     aeson base record-dot-preprocessor record-hasfield servant-server
-    sqlite-simple text time wai warp
+    sqlite-simple text time wai wai-cors warp
   ];
-  executableHaskellDepends = [ base ];
+  executableHaskellDepends = [
+    base record-dot-preprocessor record-hasfield
+  ];
   testHaskellDepends = [ base ];
   homepage = "https://github.com/LuisChDev/colvid-server";
   description = "servidor para proyecto colombia video";

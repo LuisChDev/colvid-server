@@ -14,6 +14,7 @@ import Network.Wai.Handler.Warp (run)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Database.SQLite.Simple
 import Data.Text (Text)
+import Network.Wai.Middleware.Cors (simpleCors)
 
 -- --
 
@@ -27,8 +28,8 @@ handleNewUser dbfile User{..} = do
 handleNewMovie :: String -> Movie -> Handler String
 handleNewMovie dbfile Movie{..} = do
   liftIO . withConnection dbfile $ \conn ->
-    execute conn "INSERT INTO movies VALUES (?, ?, ?, ?, ?)"
-    (title, idn, description, duration, rating)
+    execute conn "INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?)"
+    (title, idn, description, duration, rating, url)
   return "película insertada exitosamente"
 
 queryById :: FromRow a => String -> Text -> Maybe Int -> Handler a
@@ -46,7 +47,7 @@ database = "testdb.sqlite"
 
 
 app :: Application
-app = serve appAPI $ userServer :<|> movieServer :<|> staticServer
+app = simpleCors $ serve appAPI $ userServer :<|> movieServer :<|> staticServer
   where
     appAPI :: Proxy AppAPI
     appAPI = Proxy
@@ -73,7 +74,7 @@ initDB db = withConnection db $ \conn -> do
   execute
     conn ("CREATE TABLE IF NOT EXISTS movies (title TEXT," <>
            " idn INTEGER PRIMARY KEY, description TEXT, " <>
-           "duration INTEGER, rating INTEGER)") ()
+           "duration INTEGER, rating INTEGER, url TEXT)") ()
 
 -- |
 -- la rutina de IO que se va a ejecutar como servidor.

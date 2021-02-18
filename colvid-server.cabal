@@ -27,6 +27,7 @@ library
                      , time >= 1.9
                      , aeson >= 1.5
                      , wai >= 3.2
+                     , wai-cors
                      , warp >= 3.3
                      , sqlite-simple
                      , record-dot-preprocessor
