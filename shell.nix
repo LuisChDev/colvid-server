@@ -1,8 +1,11 @@
-with import <nixpkgs> {};
+with import (import ./nix/sources.nix).nixpkgs {};
 (import ./release.nix { hoo = true; }).env.overrideAttrs (old: {
   buildInputs = [
-    haskell-language-server
+    haskellPackages.haskell-language-server
     cabal-install
     cabal2nix
+    niv
+    nixops
+    heroku
   ];
 })

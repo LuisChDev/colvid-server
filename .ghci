@@ -1,0 +1,2 @@
+:set -XLambdaCase
+:set -XOverloadedStrings

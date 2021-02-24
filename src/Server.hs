@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Database.SQLite.Simple
 import Data.Text (Text)
 import Network.Wai.Middleware.Cors (simpleCors)
+import qualified System.Directory as Dir
 
 -- --
 
@@ -41,9 +42,13 @@ queryById db tbl (Just idn) = do
     then return $ head result
     else throwError err404 {errBody = "No Existe"}
 
+allMovies :: String -> Handler [Movie]
+allMovies db = liftIO . withConnection db $ \conn ->
+  query conn "SELECT * FROM movies" ()
+
 
 database :: String
-database = "testdb.sqlite"
+database = "/var/db/testdb.sqlite"
 
 
 app :: Application
@@ -56,31 +61,36 @@ app = simpleCors $ serve appAPI $ userServer :<|> movieServer :<|> staticServer
     userServer = queryById database "users" :<|> handleNewUser database
 
     movieServer :: Server MovieAPI
-    movieServer = queryById database "movies" :<|> handleNewMovie database
+    movieServer = allMovies database :<|> queryById database "movies"
+      :<|> handleNewMovie database
 
     staticServer :: Server StaticAPI
-    staticServer = serveDirectoryWebApp "assets"
+    staticServer = serveDirectoryWebApp "/var/assets"
 
 -- -- -- --
 
 -- |
 -- inicializa la base de datos
 initDB :: String -> IO ()
-initDB db = withConnection db $ \conn -> do
-  execute
-    conn ("CREATE TABLE IF NOT EXISTS users (name TEXT," <>
-           " idn INTEGER PRIMARY KEY, email TEXT UNIQUE," <>
-           "registrationDay TEXT)") ()
-  execute
-    conn ("CREATE TABLE IF NOT EXISTS movies (title TEXT," <>
-           " idn INTEGER PRIMARY KEY, description TEXT, " <>
-           "duration INTEGER, rating INTEGER, url TEXT)") ()
+initDB db = do
+  -- crea las carpetas y archivo de base de datos, si no existen.
+  Dir.createDirectoryIfMissing True "/var/assets"
+  Dir.createDirectoryIfMissing True "/var/db"
+  withConnection db $ \conn -> do
+    execute
+      conn ("CREATE TABLE IF NOT EXISTS users (name TEXT," <>
+            " idn INTEGER PRIMARY KEY, email TEXT UNIQUE," <>
+            "registrationDay TEXT)") ()
+    execute
+      conn ("CREATE TABLE IF NOT EXISTS movies (title TEXT," <>
+            " idn INTEGER PRIMARY KEY, description TEXT, " <>
+            "duration INTEGER, rating INTEGER, url TEXT)") ()
 
 -- |
 -- la rutina de IO que se va a ejecutar como servidor.
 colvidServer :: IO ()
 colvidServer = do
   initDB database
-  run 8081 app
+  run 80 app
 
 

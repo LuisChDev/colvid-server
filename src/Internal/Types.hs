@@ -1,18 +1,26 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeOperators #-}
 
+-- |
+-- Module      : Internal.Types
+-- Description : Aquí se definen los tipos empleados por la aplicación
+-- Copyright   : (c) Luis Chavarriaga, 2021
+-- License     : BSD-3-Clause
+-- Maintainer  : luischa123@gmail.com
+-- Stability   : experimental
 module Internal.Types where
-
--- Aquí se definen los tipos empleados por la aplicación
 
 import Data.Aeson.Types (FromJSON, ToJSON)
 import Data.Time (Day)
-import GHC.Generics (Generic)
-import Servant (Raw, Get, JSON, Post, QueryParam, ReqBody, (:<|>), type (:>))
-import Database.SQLite.Simple (ResultError(ConversionFailed), SQLData(SQLInteger), field, FromRow(fromRow))
+import Database.SQLite.Simple (FromRow (fromRow), ResultError (ConversionFailed), SQLData (SQLInteger), field)
+import Database.SQLite.Simple.FromField (FromField, fromField, returnError)
+import Database.SQLite.Simple.Internal (Field (Field))
+import Database.SQLite.Simple.Ok (Ok (Ok))
 import Database.SQLite.Simple.ToField (ToField, toField)
-import Database.SQLite.Simple.FromField (returnError, FromField, fromField)
-import Database.SQLite.Simple.Internal (Field(Field))
-import Database.SQLite.Simple.Ok (Ok(Ok))
+import GHC.Generics (Generic)
+import Servant (Get, JSON, Post, QueryParam, Raw, ReqBody, (:<|>), (:>))
+
+-- -- -- --
 
 -- |
 -- El tipo de los usuarios
@@ -25,6 +33,7 @@ data User = User
   deriving (Eq, Show, Generic)
 
 instance ToJSON User
+
 instance FromJSON User
 
 instance FromRow User where
@@ -39,8 +48,11 @@ data Movie = Movie
     duration :: Int,
     rating :: Rating,
     url :: String
-  } deriving (Eq, Show, Generic)
+  }
+  deriving (Eq, Show, Generic)
+
 instance ToJSON Movie
+
 instance FromJSON Movie
 
 instance FromRow Movie where
@@ -48,8 +60,11 @@ instance FromRow Movie where
 
 data Rating = Todos | MayoresDe7 | MayoresDe12 | MayoresDe15 | MayoresDe18
   deriving (Eq, Show, Generic)
+
 instance ToJSON Rating
+
 instance FromJSON Rating
+
 instance ToField Rating where
   toField Todos = SQLInteger 0
   toField MayoresDe7 = SQLInteger 1
@@ -71,15 +86,22 @@ instance FromField Rating where
 
 -- El tipo de las partes de la API de nuestra aplicación.
 
-type UserAPI = "users"
-  :> ( QueryParam "id" Int :> Get '[JSON] User
-       :<|> ReqBody '[JSON] User :> Post '[JSON] String)
+type ClientAPI = Get '[JSON] User
+
+type UserAPI =
+  "users"
+    :> ( QueryParam "id" Int :> Get '[JSON] User
+           :<|> ReqBody '[JSON] User :> Post '[JSON] String
+       )
 
 -- El tipo de la api para películas
 
-type MovieAPI = "movies"
-  :> (QueryParam "id" Int :> Get '[JSON] Movie
-       :<|> ReqBody '[JSON] Movie :> Post '[JSON] String)
+type MovieAPI =
+  "movies"
+    :> ( "all" :> Get '[JSON] [Movie]
+           :<|> QueryParam "id" Int :> Get '[JSON] Movie
+           :<|> ReqBody '[JSON] Movie :> Post '[JSON] String
+       )
 
 type StaticAPI = "assets" :> Raw
 

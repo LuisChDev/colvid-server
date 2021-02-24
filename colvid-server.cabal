@@ -17,40 +17,47 @@ maintainer:          luischa123@gmail.com
 category:            Web
 extra-source-files:  CHANGELOG.md
 
-library
-  exposed-modules:     Server
-  other-modules:       Internal.Types
-  -- other-extensions:
-  build-depends:       base ^>=4.14.1.0
-                     , text >= 1.2
-                     , servant-server
-                     , time >= 1.9
-                     , aeson >= 1.5
-                     , wai >= 3.2
-                     , wai-cors
-                     , warp >= 3.3
-                     , sqlite-simple
-                     , record-dot-preprocessor
-                     , record-hasfield
-  hs-source-dirs:      src
-  default-language:    Haskell2010
-  ghc-options:         -F -pgmF=record-dot-preprocessor -Wall
+common deps
+  build-depends: base
+               , bytestring
+               , directory
+               , text
+               , http-media
+               , servant
+               , servant-server
+               , time
+               , aeson
+               , wai
+               , wai-cors
+               , warp
+               , sqlite-simple
+               , record-dot-preprocessor
+               , record-hasfield
+  ghc-options: -Wall -F -pgmF=record-dot-preprocessor
+  default-language: Haskell2010
+  default-extensions: LambdaCase
+                    , OverloadedStrings
+
+
+-- library
+--   import: deps
+--   exposed-modules:     Server
+--   other-modules:       Internal.Types
+--   -- other-extensions:
+--   hs-source-dirs:      src
 
 executable colvid-server
+  import: deps
   main-is:             Main.hs
-  -- other-modules:
+  other-modules:       Server
+                     , Internal.Types
   -- other-extensions:
-  build-depends:       base ^>=4.14.1.0
-                     , colvid-server
-                     , record-dot-preprocessor
-                     , record-hasfield
+  -- build-depends: colvid-server
   hs-source-dirs:      app
-  default-language:    Haskell2010
-  ghc-options:         -F -pgmF=record-dot-preprocessor -Wall
-
+                     , src
+  
 test-suite colvid-server-test
-  default-language:    Haskell2010
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Test.hs
-  build-depends:       base ^>=4.14.1.0
+  build-depends:       base
