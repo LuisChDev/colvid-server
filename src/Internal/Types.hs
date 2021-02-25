@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -18,9 +19,12 @@ import Database.SQLite.Simple.Internal (Field (Field))
 import Database.SQLite.Simple.Ok (Ok (Ok))
 import Database.SQLite.Simple.ToField (ToField, toField)
 import GHC.Generics (Generic)
-import Servant (Get, JSON, Post, QueryParam, Raw, ReqBody, (:<|>), (:>))
+import Servant (BasicAuth, Get, JSON, Post, QueryParam, Raw, ReqBody, (:<|>), (:>))
 
 -- -- -- --
+-- * Tipos básicos de la aplicación
+-- Estos son los tipos de datos que se intercambiarán entre el servidor y la
+-- aplicación.
 
 -- |
 -- El tipo de los usuarios
@@ -83,10 +87,10 @@ instance FromField Rating where
   fromField f = returnError ConversionFailed f "expecting an SQLInteger column type"
 
 -- -- -- --
-
+-- * componentes API
 -- El tipo de las partes de la API de nuestra aplicación.
 
-type ClientAPI = Get '[JSON] User
+type ClientAPI = Raw
 
 type UserAPI =
   "users"
@@ -98,13 +102,14 @@ type UserAPI =
 
 type MovieAPI =
   "movies"
-    :> ( "all" :> Get '[JSON] [Movie]
+    :> ( ("all" :> Get '[JSON] [Movie])
            :<|> QueryParam "id" Int :> Get '[JSON] Movie
-           :<|> ReqBody '[JSON] Movie :> Post '[JSON] String
+           :<|> BasicAuth "admin-realm" User :> ReqBody '[JSON] Movie
+           :> Post '[JSON] String
        )
 
 type StaticAPI = "assets" :> Raw
 
-type AppAPI = UserAPI :<|> MovieAPI :<|> StaticAPI
+type AppAPI = UserAPI :<|> MovieAPI :<|> StaticAPI :<|> ClientAPI
 
 {--}
