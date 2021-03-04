@@ -10,8 +10,7 @@ import Data.Text (Text)
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
 import Database.SQLite.Simple hiding ((:.))
 import Internal.Types
-  (ClientAPI,  AppAPI,
-    -- ClientAPI,
+  (AuthAPI,  AppAPI,
     Movie (..),
     MovieAPI,
     StaticAPI,
@@ -38,6 +37,8 @@ import Servant
     (:<|>) (..),
   )
 import qualified System.Directory as Dir
+import Servant.Multipart (files, inputs, Mem, MultipartData)
+import Control.Monad (forM_)
 
 -- --
 
@@ -88,15 +89,22 @@ authCheck =
                 }
         else return Unauthorized
 
+-- este código es una simple demostración
+authSimple :: Maybe String -> Maybe String -> Bool
+authSimple Nothing _ = False
+authSimple _ Nothing = False
+authSimple (Just usr) (Just pwd) = usr == "admin" && pwd == "123456"
+
 database :: String
--- database = "/var/db/testdb.sqlite"  -- esta para producción, la de abajo para
-database = "testdb.sqlite"       -- pruebas
+database = "/var/db/testdb.sqlite" -- esta para producción, la de abajo para
+-- database = "testdb.sqlite"       -- pruebas
+
 
 app :: Application
 app =
   simpleCors $
     serveWithContext appAPI authContext $
-      userServer :<|> movieServer :<|> staticServer :<|> clientServer
+      userServer :<|> movieServer :<|> staticServer :<|> authServer
   where
     appAPI :: Proxy AppAPI
     appAPI = Proxy
@@ -115,8 +123,8 @@ app =
     staticServer :: Server StaticAPI
     staticServer = serveDirectoryWebApp "/var/assets"
 
-    clientServer :: Server ClientAPI
-    clientServer = serveDirectoryWebApp "/var/assets/homepage"
+    authServer :: Server AuthAPI
+    authServer a b = return $ authSimple a b
 
 
 -- -- -- --

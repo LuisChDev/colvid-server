@@ -23,8 +23,10 @@ common deps
                , directory
                , text
                , http-media
+               , http-client
                , servant
                , servant-server
+               , servant-multipart
                , time
                , aeson
                , wai

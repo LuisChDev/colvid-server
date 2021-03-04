@@ -19,10 +19,14 @@ import Database.SQLite.Simple.Internal (Field (Field))
 import Database.SQLite.Simple.Ok (Ok (Ok))
 import Database.SQLite.Simple.ToField (ToField, toField)
 import GHC.Generics (Generic)
-import Servant (BasicAuth, Get, JSON, Post, QueryParam, Raw, ReqBody, (:<|>), (:>))
+import Servant (Accept, MimeUnrender, PlainText, BasicAuth, Capture, Get, JSON, Post, QueryParam, Raw, ReqBody, (:<|>), (:>))
+import Network.HTTP.Client.MultipartFormData
+import Servant.Multipart
 
 -- -- -- --
+
 -- * Tipos básicos de la aplicación
+
 -- Estos son los tipos de datos que se intercambiarán entre el servidor y la
 -- aplicación.
 
@@ -87,10 +91,10 @@ instance FromField Rating where
   fromField f = returnError ConversionFailed f "expecting an SQLInteger column type"
 
 -- -- -- --
--- * componentes API
--- El tipo de las partes de la API de nuestra aplicación.
 
-type ClientAPI = Raw
+-- * componentes API
+
+-- El tipo de las partes de la API de nuestra aplicación.
 
 type UserAPI =
   "users"
@@ -98,18 +102,20 @@ type UserAPI =
            :<|> ReqBody '[JSON] User :> Post '[JSON] String
        )
 
--- El tipo de la api para películas
-
 type MovieAPI =
   "movies"
     :> ( ("all" :> Get '[JSON] [Movie])
-           :<|> QueryParam "id" Int :> Get '[JSON] Movie
-           :<|> BasicAuth "admin-realm" User :> ReqBody '[JSON] Movie
+           :<|> QueryParam "id" Int
+           :> Get '[JSON] Movie
+           :<|> BasicAuth "admin-realm" User
+           :> ReqBody '[JSON] Movie
            :> Post '[JSON] String
        )
 
 type StaticAPI = "assets" :> Raw
 
-type AppAPI = UserAPI :<|> MovieAPI :<|> StaticAPI :<|> ClientAPI
+type AuthAPI = "auth" :> QueryParam "usr" String :> QueryParam "pwd" String :> Get '[JSON] Bool
+
+type AppAPI = UserAPI :<|> MovieAPI :<|> StaticAPI :<|> AuthAPI
 
 {--}
