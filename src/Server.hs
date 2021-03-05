@@ -39,6 +39,7 @@ import Servant
 import qualified System.Directory as Dir
 import Servant.Multipart (files, inputs, Mem, MultipartData)
 import Control.Monad (forM_)
+import System.Environment (getEnv)
 
 -- --
 
@@ -157,4 +158,5 @@ initDB db = do
 colvidServer :: IO ()
 colvidServer = do
   initDB database
-  run 8081 app
+  port <- getEnv "PORT"
+  run (read port) app

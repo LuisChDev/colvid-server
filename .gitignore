@@ -4,3 +4,4 @@ testdb.sqlite
 dist-newstyle
 result*
 default.nix
+# nix/static-haskell-nix
