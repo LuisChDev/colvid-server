@@ -5,12 +5,17 @@
 
 module Server (colvidServer) where
 
+import Prelude hiding (readFile)
+
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Data.Text (Text)
+import Data.ByteString (readFile, ByteString)
+import Data.String (IsString (fromString))
 import Data.Time.Calendar.OrdinalDate (fromOrdinalDate)
-import Database.SQLite.Simple hiding ((:.))
+import Database.PostgreSQL.Simple hiding ((:.))
+import Database.PostgreSQL.Simple.Types (Query (Query))
 import Internal.Types
-  (AuthAPI,  AppAPI,
+  ( AppAPI,
+    AuthAPI,
     Movie (..),
     MovieAPI,
     StaticAPI,
@@ -36,43 +41,60 @@ import Servant
     throwError,
     (:<|>) (..),
   )
-import qualified System.Directory as Dir
-import Servant.Multipart (files, inputs, Mem, MultipartData)
-import Control.Monad (forM_)
 import System.Environment (getEnv)
+import Data.Pool (withResource, createPool, Pool)
+import Control.Exception (bracket)
+import Network.AWS (send, runAWS, runResourceT, Env, newEnv)
+import Network.AWS.Auth (Credentials(Discover))
+import Network.AWS.S3 (ObjectKey(..), putObject)
+import Network.AWS.Data.Body
+import Data.Text (pack)
 
 -- --
 
-handleNewUser :: String -> User -> Handler String
-handleNewUser dbfile User {..} = do
-  liftIO . withConnection dbfile $ \conn ->
+handleNewUser :: Pool Connection -> User -> Handler String
+handleNewUser conns User {..} = do
+  liftIO . withResource conns $ \conn ->
     execute
       conn
       "INSERT INTO users VALUES (?, ?, ?, date(?))"
       (name, idn, email, registrationDay)
   return "usuario insertado exitosamente"
 
-handleNewMovie :: String -> Movie -> Handler String
-handleNewMovie dbfile Movie {..} = do
-  liftIO . withConnection dbfile $ \conn ->
-    execute
-      conn
-      "INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?)"
-      (title, idn, description, duration, rating, url)
+handleNewMovie :: Env -> Pool Connection -> Movie -> Handler String
+handleNewMovie env conns Movie {..} = do
+  -- se guarda la imagen del cliente en un balde S3 y se guarda
+  -- la URL resultante en la base de datos
+  liftIO $ do
+    -- TODO: revisar si esta es la mejor manera de cargar archivos 0_0
+    file <- readFile url
+    _ <- runResourceT $
+      runAWS env $ send $
+        putObject "colombiavideo" (ObjectKey . pack $ title) $ toBody file
+    withResource conns $ \conn ->
+      execute
+        conn
+        "INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?)"
+        (title, idn, description, duration, rating, title)
   return "película insertada exitosamente"
 
-queryById :: FromRow a => String -> Text -> Maybe Int -> Handler a
+queryById :: FromRow a => Pool Connection -> ByteString -> Maybe Int -> Handler a
 queryById _ _ Nothing = throwError err400 {errBody = "No se especificó ID"}
-queryById db tbl (Just idn) = do
-  result <- liftIO . withConnection db $ \conn ->
-    query conn ("SELECT * FROM " <> Query tbl <> " WHERE idn = ?") (Only idn)
+queryById conns tbl (Just idn) = do
+  result <-
+    liftIO . withResource conns $ \conn ->
+      query
+        conn
+        ("SELECT * FROM " <> Query tbl <> " WHERE idn = ?")
+        (Only idn)
   if not $ null result
     then return $ head result
     else throwError err404 {errBody = "No Existe"}
 
-allMovies :: String -> Handler [Movie]
-allMovies db = liftIO . withConnection db $ \conn ->
-  query conn "SELECT * FROM movies" ()
+allMovies :: Pool Connection -> Handler [Movie]
+allMovies conns =
+  liftIO . withResource conns $ \conn ->
+    query conn "SELECT * FROM movies" ()
 
 authCheck :: BasicAuthCheck User
 authCheck =
@@ -96,13 +118,12 @@ authSimple Nothing _ = False
 authSimple _ Nothing = False
 authSimple (Just usr) (Just pwd) = usr == "admin" && pwd == "123456"
 
-database :: String
-database = "/var/db/testdb.sqlite" -- esta para producción, la de abajo para
--- database = "testdb.sqlite"       -- pruebas
+-- database :: String
+-- database = "/var/db/testdb.sqlite" -- esta para producción, la de abajo para
+-- database = "testdb.sqlite"         -- pruebas
 
-
-app :: Application
-app =
+app :: Env -> Pool Connection -> Application
+app env database =
   simpleCors $
     serveWithContext appAPI authContext $
       userServer :<|> movieServer :<|> staticServer :<|> authServer
@@ -119,7 +140,7 @@ app =
     movieServer :: Server MovieAPI
     movieServer =
       allMovies database :<|> queryById database "movies"
-        :<|> \_ -> handleNewMovie database
+        :<|> \_ -> handleNewMovie env database
 
     staticServer :: Server StaticAPI
     staticServer = serveDirectoryWebApp "/var/assets"
@@ -127,36 +148,40 @@ app =
     authServer :: Server AuthAPI
     authServer a b = return $ authSimple a b
 
-
 -- -- -- --
 
 -- |
 -- inicializa la base de datos
-initDB :: String -> IO ()
-initDB db = do
-  -- crea las carpetas y archivo de base de datos, si no existen.
-  Dir.createDirectoryIfMissing True "/var/assets"
-  Dir.createDirectoryIfMissing True "/var/db"
-  withConnection db $ \conn -> do
+initDB :: Connection -> IO ()
+initDB conn = do
+  _ <-
     execute
       conn
       ( "CREATE TABLE IF NOT EXISTS users (name TEXT,"
           <> " idn INTEGER PRIMARY KEY, email TEXT UNIQUE,"
-          <> "registrationDay TEXT)"
+          <> "registrationDay DATE)"
       )
       ()
+  _ <-
     execute
       conn
       ( "CREATE TABLE IF NOT EXISTS movies (title TEXT,"
           <> " idn INTEGER PRIMARY KEY, description TEXT, "
-          <> "duration INTEGER, rating INTEGER, url TEXT)"
+          <> "duration INTEGER, rating SMALLINT, url TEXT)"
       )
       ()
+  return ()
 
 -- |
 -- la rutina de IO que se va a ejecutar como servidor.
 colvidServer :: IO ()
 colvidServer = do
-  initDB database
   port <- getEnv "PORT"
-  run (read port) app
+  db <- getEnv "DATABASE_URL"
+  awsEnv <- newEnv Discover
+  conn <- initPool $ fromString db
+  bracket (connectPostgreSQL $fromString db) close $ initDB
+  run (read port) $ app awsEnv conn
+  where
+    initPool :: ByteString -> IO (Pool Connection)
+    initPool dbStr = createPool (connectPostgreSQL dbStr) close 2 60 10

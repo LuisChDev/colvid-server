@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
 -- |
@@ -12,16 +13,43 @@
 module Internal.Types where
 
 import Data.Aeson.Types (FromJSON, ToJSON)
+import Data.ByteString.Builder (byteString)
+import Data.Either.Extra (mapRight)
+import Data.Text (unpack)
 import Data.Time (Day)
-import Database.SQLite.Simple (FromRow (fromRow), ResultError (ConversionFailed), SQLData (SQLInteger), field)
-import Database.SQLite.Simple.FromField (FromField, fromField, returnError)
-import Database.SQLite.Simple.Internal (Field (Field))
-import Database.SQLite.Simple.Ok (Ok (Ok))
-import Database.SQLite.Simple.ToField (ToField, toField)
+import Database.PostgreSQL.Simple.FromField
+  ( Field (typeOid),
+    FromField,
+    ResultError (..),
+    fromField,
+    returnError,
+  )
+import Database.PostgreSQL.Simple.FromRow (FromRow (..), field)
+import Database.PostgreSQL.Simple.ToField (Action (Plain), ToField, toField)
+import Database.PostgreSQL.Simple.TypeInfo.Static (int2Oid)
+import Debug.Trace (trace)
 import GHC.Generics (Generic)
-import Servant (Accept, MimeUnrender, PlainText, BasicAuth, Capture, Get, JSON, Post, QueryParam, Raw, ReqBody, (:<|>), (:>))
-import Network.HTTP.Client.MultipartFormData
+import Servant
+  ( BasicAuth,
+    Get,
+    JSON,
+    Post,
+    QueryParam,
+    Raw,
+    ReqBody,
+    (:<|>),
+    (:>),
+  )
 import Servant.Multipart
+  ( FromMultipart (..),
+    MultipartForm,
+    Tmp,
+    fdPayload,
+    files,
+    inputs,
+    lookupFile,
+    lookupInput,
+  )
 
 -- -- -- --
 
@@ -67,28 +95,50 @@ instance FromRow Movie where
   fromRow = Movie <$> field <*> field <*> field <*> field <*> field <*> field
 
 data Rating = Todos | MayoresDe7 | MayoresDe12 | MayoresDe15 | MayoresDe18
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Read, Generic)
 
 instance ToJSON Rating
 
 instance FromJSON Rating
 
 instance ToField Rating where
-  toField Todos = SQLInteger 0
-  toField MayoresDe7 = SQLInteger 1
-  toField MayoresDe12 = SQLInteger 2
-  toField MayoresDe15 = SQLInteger 3
-  toField MayoresDe18 = SQLInteger 4
+  toField Todos = Plain $ byteString "0"
+  toField MayoresDe7 = Plain $ byteString "1"
+  toField MayoresDe12 = Plain $ byteString "2"
+  toField MayoresDe15 = Plain $ byteString "3"
+  toField MayoresDe18 = Plain $ byteString "4"
 
 instance FromField Rating where
-  fromField f@(Field (SQLInteger r) _)
-    | r == 0 = Ok Todos
-    | r == 1 = Ok MayoresDe7
-    | r == 2 = Ok MayoresDe12
-    | r == 3 = Ok MayoresDe15
-    | r == 4 = Ok MayoresDe18
-    | otherwise = returnError ConversionFailed f $ "Expecting 0 =< r < 5, got" ++ show r
-  fromField f = returnError ConversionFailed f "expecting an SQLInteger column type"
+  fromField f bs
+    | typeOid f /= int2Oid = returnError Incompatible f ""
+    | bs == Nothing = returnError UnexpectedNull f ""
+    | bs == Just "0" = pure Todos
+    | bs == Just "1" = pure MayoresDe7
+    | bs == Just "2" = pure MayoresDe12
+    | bs == Just "3" = pure MayoresDe15
+    | bs == Just "4" = pure MayoresDe18
+    | otherwise = returnError ConversionFailed f ""
+
+-- |
+-- instancia que permite extraer un objeto de tipo película a partir del
+-- cuerpo de una solicitud multipart.
+-- el objeto resultante es TEMPORAL, es necesario guardar apropiadamente
+-- la imagen para obtener la URL permanente y ahí sí retornar
+instance FromMultipart Tmp Movie where
+  fromMultipart form =
+    Movie <$> extract' "title"
+      <*> extract "idn"
+      <*> extract' "description"
+      <*> extract "duration"
+      <*> extract "rating"
+      <*> extractFile "poster"
+    where
+      extract field_ = mapRight (read . unpack) $ lookupInput field_ form
+      extract' field_ = mapRight unpack $ lookupInput field_ form
+      extractFile field_ = mapRight fdPayload $ lookupFile field_ form
+
+-- dupl :: (a -> a -> b) -> a -> b
+-- dupl f val = f val val
 
 -- -- -- --
 
@@ -99,17 +149,21 @@ instance FromField Rating where
 type UserAPI =
   "users"
     :> ( QueryParam "id" Int :> Get '[JSON] User
-           :<|> ReqBody '[JSON] User :> Post '[JSON] String
+           :<|> ReqBody '[JSON] User
+             :> Post '[JSON] String
        )
 
 type MovieAPI =
   "movies"
     :> ( ("all" :> Get '[JSON] [Movie])
            :<|> QueryParam "id" Int
-           :> Get '[JSON] Movie
+             :> Get '[JSON] Movie
+           -- :<|> BasicAuth "admin-realm" User
+           --   :> ReqBody '[JSON] Movie
+           --   :> Post '[JSON] String   -- subir película
            :<|> BasicAuth "admin-realm" User
-           :> ReqBody '[JSON] Movie
-           :> Post '[JSON] String
+             :> MultipartForm Tmp Movie
+             :> Post '[JSON] String -- subir película
        )
 
 type StaticAPI = "assets" :> Raw

@@ -3,8 +3,12 @@ let
   pkgs = import sources.nixpkgs {};
   colvid-server = import ./. {};
 
+  aws_key = builtins.getEnv "AWS_ACCESS_KEY_ID";
+  aws_secret = builtins.getEnv "AWS_SECRET_ACCESS_KEY";
+  name = builtins.getEnv "HEROKU_APP";
+
 in pkgs.dockerTools.buildImage {
-  name = "colvid-server-docker";
+  inherit name;
   tag = "latest";
   contents = [
     colvid-server
@@ -12,9 +16,8 @@ in pkgs.dockerTools.buildImage {
   ];
 
   runAsRoot = ''
-    mkdir /var
-    mkdir /var/assets
-    mkdir /var/db
+    export AWS_ACCESS_KEY_ID=${aws_key}
+    export AWS_SECRET_ACCESS_KEY=${aws_secret}
   '';
 
   config = {
