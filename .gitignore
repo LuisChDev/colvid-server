@@ -5,3 +5,5 @@ dist-newstyle
 result*
 default.nix
 # nix/static-haskell-nix
+
+.nix-gc-roots
